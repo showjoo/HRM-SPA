@@ -1,14 +1,21 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { Observable, map } from 'rxjs';
+import { BehaviorSubject, Observable, map } from 'rxjs';
 import { Login } from 'src/app/Shared/Models/Login';
 import { Register } from 'src/app/Shared/Models/Register';
 import { JwtHelperService } from '@auth0/angular-jwt';
+import { UserWAdmin } from 'src/app/Shared/Models/User';
 
 @Injectable({
   providedIn: 'root'
 })
 export class AccountService {
+
+  private currentUserSubject = new BehaviorSubject<UserWAdmin>({} as UserWAdmin);
+  public currentUser = this.currentUserSubject.asObservable();
+
+  private isLoggedInSubject = new BehaviorSubject<boolean>(false);
+  public isLoggedIn = this.isLoggedInSubject.asObservable();
 
   jwtHelper = new JwtHelperService();
 
@@ -23,15 +30,38 @@ export class AccountService {
       return false;
     }))
   }
-  Register(registerData:Register){
-   // "https://netfullstackapigateway.azure-api.net/api/Account/login"
+
+  Logout(){
+    localStorage.removeItem('token');
+    this.currentUserSubject.next({} as UserWAdmin);
+    this.isLoggedInSubject.next (false);
+  }
+
+  Register(registerData:Register):Observable<boolean>{
+    return this.http.post<boolean>("https://netfullstackapigateway.azure-api.net/api/Account/register", registerData);
   }
 
   populateUserInfoFromToken(){
     var tokenValue = localStorage.getItem('token');
     if (tokenValue && !this.jwtHelper.isTokenExpired(tokenValue)){
-      const decodeToken = this.jwtHelper.decodeToken(tokenValue);
-      
+      const decodedToken = this.jwtHelper.decodeToken(tokenValue);
+      this.isLoggedInSubject.next(true);
+      const newUser:UserWAdmin = {
+       email: decodedToken.email,
+       password: decodedToken.password,
+       firstName: decodedToken.firstName,
+       lastName: decodedToken.lastName,
+       isAdmin: true
+      };
+     this.currentUserSubject.next(newUser);
     }
+  }
+  ValidateJWTToken(){
+    var tokenValue = localStorage.getItem('token');
+    if (tokenValue != null && !this.jwtHelper.isTokenExpired(tokenValue)){
+      const decodedToken = this.jwtHelper.decodeToken(tokenValue);
+      this.isLoggedInSubject.next(true);
+      this.currentUserSubject.next(decodedToken);
+    };
   }
 }
